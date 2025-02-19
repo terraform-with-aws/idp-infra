@@ -1,0 +1,22 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node main.ts",
+  "projectId": "c32d862b-3982-4fa8-ab21-d2a76334c17d",
+  "terraformProviders": [],
+  "terraformModules": [
+    {
+      "name": "vpc",
+      "source": "terraform-aws-modules/vpc/aws",
+      "version": "3.14.0"
+    },
+    {
+      "name": "security-group",
+      "source": "terraform-aws-modules/security-group/aws",
+      "version": "4.9.0"
+    }
+  ],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
