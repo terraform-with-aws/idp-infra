@@ -1,5 +1,11 @@
-import { AwsProvider, dynamodb, ec2, ecs, ssm } from "@cdktf/provider-aws";
+import { AwsProvider, dynamodb, ec2, ecs} from "@cdktf/provider-aws";
+import { Eip } from "@cdktf/provider-aws/lib/ec2";
 import {
+  InternetGateway,
+  NatGateway,
+  Route,
+  RouteTable,
+  RouteTableAssociation,
   SecurityGroup,
   SecurityGroupRule,
   Subnet,
@@ -14,12 +20,13 @@ interface BaseStackConfig {
 
 export class BaseStack extends TerraformStack {
   public readonly vpc: Vpc;
-  public readonly publicSubnet: Subnet;
-  public readonly appSubnet: Subnet;
-  public readonly dbSubnet: Subnet;
+  public readonly publicSubnets: Subnet[];
+  public readonly appSubnets: Subnet[];
+  public readonly dbSubnets: Subnet[];
+  public readonly ecsCluster: ecs.EcsCluster;
   public readonly publicSecurityGroup: SecurityGroup;
   public readonly appSecurityGroup: SecurityGroup;
-  public readonly dbSecurityGroup: SecurityGroup;
+  public readonly dataSecurityGroup: SecurityGroup;
   public readonly dynamodbTable: dynamodb.DynamodbTable;
 
   constructor(scope: Construct, name: string, config: BaseStackConfig) {
@@ -31,148 +38,247 @@ export class BaseStack extends TerraformStack {
     });
 
     // Create VPC
-    const vpc = new Vpc(this, "vpc", {
-      cidrBlock: "10.0.0.0/16",
+    const availabilityZones = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]; // Adjust for your region
+    
+    // Create VPC
+    const vpc = new Vpc(this, "DevVPC", {
+      cidrBlock: "10.1.0.0/16",
       enableDnsSupport: true,
       enableDnsHostnames: true,
-      tags: {
-        name: "my_vpc",
-      },
+      tags: { Name: "DevVPC" },
     });
-    this.vpc = vpc;
 
-    // Create Public Subnet
-    const publicSubnet = new Subnet(this, "PublicSubnet", {
+    // Create Internet Gateway
+    const igw = new InternetGateway(this, "InternetGateway", {
       vpcId: vpc.id,
-      cidrBlock: "10.0.1.0/24",
-      availabilityZone: "ap-south-1a",
-      mapPublicIpOnLaunch: true,
-      tags: {
-        name: "public_subnet",
-      },
+      tags: { Name: "DevVPC-IGW" },
     });
-    this.publicSubnet = publicSubnet;
 
-    // Create Private Subnet
-    const appSubnet = new Subnet(this, "AppSubnet", {
+    // Create Public Subnets
+    const publicSubnets = availabilityZones.map((az, index) =>
+      new Subnet(this, `PublicSubnet${index}`, {
+        vpcId: vpc.id,
+        cidrBlock: `10.1.${index+1}.0/24`,
+        availabilityZone: az,
+        mapPublicIpOnLaunch: true,
+        tags: { Name: `PublicSubnet-${az}` },
+      })
+    );
+
+    // Create NAT Gateway
+    const natEip = new Eip(this, "NatEip");
+    const natGateway = new NatGateway(this, "NatGateway", {
+      subnetId: publicSubnets[0].id, // Placing NAT Gateway in the first public subnet
+      allocationId: natEip.id,
+      tags: { Name: "DevVPC-NATGW" },
+    });
+
+    // Create Application Subnets
+    const appSubnets = availabilityZones.map((az, index) =>
+      new Subnet(this, `AppSubnet${index + 1}`, {
+        vpcId: vpc.id,
+        cidrBlock: `10.1.${index + 4}.0/24`,
+        availabilityZone: az,
+        tags: { Name: `AppSubnet-${az}` },
+      })
+    );
+
+    // Create Database Subnets
+    const dbSubnets = availabilityZones.map((az, index) =>
+      new Subnet(this, `DbSubnet${index + 1}`, {
+        vpcId: vpc.id,
+        cidrBlock: `10.1.${index+ 8}.0/24`,
+        availabilityZone: az,
+        tags: { Name: `DbSubnet-${az}` },
+      })
+    );
+
+    // Create Public Route Table and Associate with Public Subnets
+    const publicRouteTable = new RouteTable(this, "PublicRouteTable", {
       vpcId: vpc.id,
-      cidrBlock: "10.0.4.0/24",
-      availabilityZone: "ap-south-1b",
-      tags: {
-        name: "app_ubnet",
-      },
+      tags: { Name: "PublicRouteTable" },
     });
-    this.appSubnet = appSubnet;
 
-    // Create dbSubnet
-    const dbSubnet = new Subnet(this, "DbSubnet", {
+    new Route(this, "PublicRoute", {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: "0.0.0.0/0",
+      gatewayId: igw.id,
+    });
+
+    publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `PublicRouteAssoc${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
+
+    // Create Private Route Table for Application and Database Subnets
+    const privateRouteTable = new RouteTable(this, "PrivateRouteTable", {
       vpcId: vpc.id,
-      cidrBlock: "10.0.8.0/24",
-      availabilityZone: "ap-south-1c",
-      tags: {
-        name: "db_subnet",
-      },
+      tags: { Name: "PrivateRouteTable" },
     });
-    this.dbSubnet = dbSubnet;
 
+    new Route(this, "PrivateRoute", {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: "0.0.0.0/0",
+      natGatewayId: natGateway.id,
+    });
 
+    appSubnets.concat(dbSubnets).forEach((subnet, index) => {
+      new RouteTableAssociation(this, `PrivateRouteAssoc${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
 
-    // Create Public Security Group
-    const publicSecurityGroup = new SecurityGroup(this, "PublicSecurityGroup", {
+    const publicSG = new SecurityGroup(this, "PublicSecurityGroup", {
       vpcId: vpc.id,
-      name: "public_sg",
+      name: "PublicSG",
     });
-    new SecurityGroupRule(this, "PublicSecurityGroupRule", {
-      securityGroupId: publicSecurityGroup.id,
-      type: "ingress",
-      fromPort: 80,
-      toPort: 80,
-      protocol: "tcp",
+
+    const appSG = new SecurityGroup(this, "AppSecurityGroup", {
+      vpcId: vpc.id,
+      name: "AppSG" ,
+    });
+
+    const dataSG = new SecurityGroup(this, "DataSecurityGroup", {
+      vpcId: vpc.id,
+      name: "DataSG",
+    });
+
+    // Allow all egress traffic for all security groups
+    new SecurityGroupRule(this, 'Egress-public', {
+      securityGroupId: publicSG.id,
+      type: "egress",
+      fromPort: 0,
+      toPort: 0,
+      protocol: "-1",
       cidrBlocks: ["0.0.0.0/0"],
     });
-    new SecurityGroupRule(this, "PublicSecurityGroupRule2", {
-      securityGroupId: publicSecurityGroup.id,
-      type: "ingress",
-      fromPort: 443,
-      toPort: 443,
-      protocol: "tcp",
+    new SecurityGroupRule(this, 'Egress-app', {
+      securityGroupId: appSG.id,
+      type: "egress",
+      fromPort: 0,
+      toPort: 0,
+      protocol: "-1",
       cidrBlocks: ["0.0.0.0/0"],
     });
-    this.publicSecurityGroup = publicSecurityGroup;
-
-
-
-    // App Security Group
-    const appSecurityGroup = new SecurityGroup(this, "AppSecurityGroup", {
-      vpcId: vpc.id,
-      name: "app_sg",
+    new SecurityGroupRule(this, 'Egress-data', {
+      securityGroupId: dataSG.id,
+      type: "egress",
+      fromPort: 0,
+      toPort: 0,
+      protocol: "-1",
+      cidrBlocks: ["0.0.0.0/0"],
     });
-    new SecurityGroupRule(this, "AppSecurityGroupRule", {
-      securityGroupId: appSecurityGroup.id,
+
+    // Allow ingress within the same security group
+    new SecurityGroupRule(this, `SelfIngressEgress-public`, {
+      securityGroupId: publicSG.id,
       type: "ingress",
       fromPort: 0,
-      toPort: 65535,
-      protocol: "tcp",
-      cidrBlocks: [publicSubnet.cidrBlock],
+      toPort: 0,
+      protocol: "-1",
+      selfAttribute: true,
     });
-    this.appSecurityGroup = appSecurityGroup;
-
-
-    const dbSecurityGroup = new SecurityGroup(this, "DbSecurityGroup", {
-      vpcId: vpc.id,
-      name: "db-sg",
-      description: "Allow ingress from app security group",
-    });
-    new SecurityGroupRule(this, "DbIngressFromApp", {
-      securityGroupId: dbSecurityGroup.id,
+    new SecurityGroupRule(this, `SelfIngressEgress-app`, {
+      securityGroupId: appSG.id,
       type: "ingress",
       fromPort: 0,
-      toPort: 65535,
-      protocol: "tcp",
-      cidrBlocks: [dbSubnet.cidrBlock],
+      toPort: 0,
+      protocol: "-1",
+      selfAttribute: true,
     });
-    this.dbSecurityGroup = dbSecurityGroup;
+    new SecurityGroupRule(this, 'SelfIngressEgress-data', {
+      securityGroupId: dataSG.id,
+      type: "ingress",
+      fromPort: 0,
+      toPort: 0,
+      protocol: "-1",
+      selfAttribute: true,
+    });
 
+    // Public SG allows HTTP & HTTPS from any IP
+    [80, 443].forEach((port,index) => {
+      new SecurityGroupRule(this, `PublicSG-Ingress-${index}`, {
+        securityGroupId: publicSG.id,
+        type: "ingress",
+        fromPort: port,
+        toPort: port,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      });
+    });
 
-    // Define the ECS Service-Linked Role
-    // new iam.IamServiceLinkedRole(this, "ecs", {
-    //   awsServiceName: "ecs.amazonaws.com",
-    // });
-    
+    // App SG allows traffic from Public SG
+    new SecurityGroupRule(this, "AppSG-From-PublicSG", {
+      securityGroupId: appSG.id,
+      type: "ingress",
+      fromPort: 0,
+      toPort: 0,
+      protocol: "-1",
+      cidrBlocks: publicSubnets.map((subnet) => subnet.cidrBlock),
+    });
+
+    // Data SG allows traffic from App SG
+    new SecurityGroupRule(this, "DataSG-From-AppSG", {
+      securityGroupId: dataSG.id,
+      type: "ingress",
+      fromPort: 0,
+      toPort: 0,
+      protocol: "-1",
+      cidrBlocks: appSubnets.map((subnet) => subnet.cidrBlock),
+    });
+
+    // // Define the ECS Service-Linked Role
+    // // new iam.IamServiceLinkedRole(this, "ecs", {
+    // //   awsServiceName: "ecs.amazonaws.com",
+    // // });
 
     const ecsCluster = new ecs.EcsCluster(this, "ecs-cluster", {
       name: "main",
-    })
+    });
 
     new ecs.EcsClusterCapacityProviders(this, "ecs-capacity-provider", {
       clusterName: ecsCluster.name,
-      capacityProviders: ["FARGATE"]
-    })
+      capacityProviders: ["FARGATE"],
+    });
 
-    const dynamoDBTable = new dynamodb.DynamodbTable(this, 'idp-environment', {
-      name: 'idp-environment',
-      billingMode: 'PROVISIONED',
+    const dynamoDBTable = new dynamodb.DynamodbTable(this, "idp-environment", {
+      name: "idp-environment",
+      billingMode: "PROVISIONED",
       readCapacity: 2,
       writeCapacity: 2,
       hashKey: "environment",
-      attribute: [{
-        name: "environment",
-        type: "S", 
-      }],
-    })
-    this.dynamodbTable = dynamoDBTable;
+      attribute: [
+        {
+          name: "environment",
+          type: "S",
+        },
+      ],
+    });
 
+    // // const amiId = new ssm.DataAwsSsmParameter(this, 'latest-amazon-linux-2-ami-id', {
+    // //   name: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    // // })
 
-
-    const amiId = new ssm.DataAwsSsmParameter(this, 'latest-amazon-linux-2-ami-id', {
-      name: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
-    })
-
-    new ec2.Instance(this, 'activation', {
-      ami: amiId.value,
-      instanceType: 't2.micro', // If `t2.micro` is not available in your region, choose `t3.micro` to keep using the Free Tier,
+    new ec2.Instance(this, "activation", {
+      ami: "ami-0ddfba243cbee3768",
+      instanceType: "t2.micro",
       associatePublicIpAddress: false,
-      subnetId: appSubnet.id,
-    })
+      subnetId: appSubnets[0].id,
+    });
+
+
+
+    this.vpc = vpc;
+    this.publicSecurityGroup = publicSG;
+    this.appSecurityGroup = appSG;
+    this.dataSecurityGroup = dataSG;
+    this.ecsCluster = ecsCluster;
+    this.dynamodbTable = dynamoDBTable;
+    this.publicSubnets = publicSubnets;
+    this.appSubnets = appSubnets;
+    this.dbSubnets = dbSubnets;
   }
 }
