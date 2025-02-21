@@ -13,6 +13,7 @@ export interface PetStackConfig {
   appSubnet: Subnet[];
   repository: string;
   branch: string;
+  owner: string;
 }
 
 export default class PetStack extends TerraformStack {
@@ -28,6 +29,9 @@ export default class PetStack extends TerraformStack {
     const ecrRepository = new ecr.EcrRepository(this, "repository", {
       name: name,
       imageTagMutability: 'MUTABLE', // Must be mutable for us to push new versions to the `latest` tag
+      tags: {
+        owner: config.owner,
+      }
     })
 
 
@@ -58,6 +62,9 @@ export default class PetStack extends TerraformStack {
         protocol: 'HTTP',
         targetType: 'ip',
         vpcId: config.vpcId,
+        tags: {
+          owner: config.owner,
+        }
       })
   
       const loadBalancer = new elb.Alb(this, 'loadBalancer', {
@@ -67,6 +74,9 @@ export default class PetStack extends TerraformStack {
         securityGroups: [config.publicSecurityGroup.id],
         subnets: config.publicSubnets.map(subnet => subnet.id),
         enableDeletionProtection: false, // Ensures we can use Terraform to delete it
+        tags: {
+          owner: config.owner,
+        }
       })
   
       new elb.LbListener(this, 'listener', {
@@ -77,6 +87,9 @@ export default class PetStack extends TerraformStack {
           type: "forward",
           targetGroupArn: targetGroup.arn,
         }],
+        tags: {
+          owner: config.owner,
+        }
       })
 
 
@@ -121,7 +134,10 @@ export default class PetStack extends TerraformStack {
           portMappings: [{
             containerPort: 3456,
           }]
-        }])
+        }]),
+        tags: {
+          owner: config.owner,
+        }
       })
   
       // @ts-ignore
@@ -142,6 +158,9 @@ export default class PetStack extends TerraformStack {
           subnets: config.appSubnet.map((subnet) => subnet.id),
 
         },
+        tags: {
+          owner: config.owner,
+        }
       })
 
     const callerIdentity = new datasources.DataAwsCallerIdentity(this, "current")
@@ -262,6 +281,9 @@ export default class PetStack extends TerraformStack {
           vpcId: config.vpcId,
           securityGroupIds: [config.appSecurityGroup.id],
           subnets: config.appSubnet.map((subnet) => subnet.id) || [],
+        },
+        tags: {
+          owner: config.owner,
         }
       })
 
@@ -278,7 +300,8 @@ export default class PetStack extends TerraformStack {
             pattern: config.branch,
           }]
         }]
-      })
+      }),
+      
   
       new TerraformOutput(this, "lbDnsName", {
         value: loadBalancer.dnsName,

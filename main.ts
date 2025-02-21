@@ -14,6 +14,7 @@ new PetStack(app, "pet-app", {
   profile: "ark-dev",
   repository: "terraform-with-aws/apps-petapp",
   branch: "main",
+  owner: "admin",
 });
 
 app.synth();
