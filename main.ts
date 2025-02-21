@@ -22,4 +22,10 @@ new PetStack(app, "pet-app", {
   repository: "terraform-with-aws/apps-petapp",
   branch: "main"
 })
+new PetStack(app, "pet-app-1", {
+  ...getBaseConfig(devBase),
+  profile: "ark-dev",
+  repository: "terraform-with-aws/apps-petapp",
+  branch: "main"
+})
 app.synth();
