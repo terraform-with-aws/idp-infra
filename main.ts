@@ -16,4 +16,10 @@ new PetStack(app, "pet-app", {
   owner: "admin",
 });
 
+new PetStack(app, "pet-app-2", {
+  ...getBaseConfig(devBase),
+  owner: "rajshriyanshu5@gmail.com",
+  branch: "main",
+  repository: "terraform-with-aws/apps-petapp"
+})
 app.synth();
