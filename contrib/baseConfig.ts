@@ -8,10 +8,12 @@ export interface BaseConfig {
   publicSubnets: Subnet[];
   appSubnet: Subnet[];
   ecsClusterName: string;
+  profile: string;
 }
 
 export default function getBaseConfig (devBase: BaseStack): BaseConfig {
   return {
+    profile: "ark-dev",
     vpcId: devBase.vpc.id,
     publicSecurityGroup: devBase.publicSecurityGroup,
     publicSubnets: devBase.publicSubnets,
