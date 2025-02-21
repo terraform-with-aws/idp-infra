@@ -9,19 +9,11 @@ const devBase = new BaseStack(app, "infra", {
   profile: "ark-dev",
 });
 
-
-
-new PetStack(app, "pet-app", {
-  ...getBaseConfig(devBase),
-  profile: "ark-dev",
-  repository: 'terraform-with-aws/apps-petapp',
-  branch: 'main'
-});
-
 new PetStack(app, "pet-app", {
   ...getBaseConfig(devBase),
   profile: "ark-dev",
   repository: "terraform-with-aws/apps-petapp",
-  branch: "main"
-})
+  branch: "main",
+});
+
 app.synth();
