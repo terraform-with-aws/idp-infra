@@ -1,5 +1,5 @@
 import { SecurityGroup, Subnet } from "@cdktf/provider-aws/lib/vpc";
-import { BaseStack } from "../base";
+import { BaseStack } from "../../base";
 
 export interface BaseConfig {
   vpcId: string;
