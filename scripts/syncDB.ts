@@ -2,8 +2,9 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DynamoDBClient, ScanCommand, DeleteItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
 
-const dynamodbTablename = process.env.DYNAMODB_TABLE_NAME;
+const dynamodbTablename = process.env.DYNAMODB_TABLE_NAME || "infra-idp-environment-type";
 const awsRegion = process.env.AWS_REGION || "ap-south-1";
+
 if (dynamodbTablename === undefined) {
   throw new Error('DynamoDB table not defined. Aborting.')
 }
