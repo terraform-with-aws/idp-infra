@@ -1,7 +1,7 @@
 import { App } from "cdktf";
 import { BaseStack } from "./base";
 import PetStack from "./contrib/PetApp";
-import getBaseConfig from "./contrib/PetApp/baseConfig";
+import getBaseConfig from "./contrib/PetApp/getBaseConfig";
 
 const app = new App();
 //@ts-ignore
@@ -11,7 +11,6 @@ const devBase = new BaseStack(app, "infra", {
 
 new PetStack(app, "pet-app", {
   ...getBaseConfig(devBase),
-  repository: "terraform-with-aws/apps-petapp",
   branch: "main",
   owner: "admin",
 });

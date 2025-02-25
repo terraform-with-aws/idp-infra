@@ -9,11 +9,13 @@ export interface BaseConfig {
   appSubnet: Subnet[];
   ecsClusterName: string;
   profile: string;
+  repository: string;
 }
 
 export default function getBaseConfig (devBase: BaseStack): BaseConfig {
   return {
     profile: "ark-dev",
+  repository: "terraform-with-aws/apps-petapp",
     vpcId: devBase.vpc.id,
     publicSecurityGroup: devBase.publicSecurityGroup,
     publicSubnets: devBase.publicSubnets,

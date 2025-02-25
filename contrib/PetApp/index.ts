@@ -309,3 +309,6 @@ export default class PetStack extends TerraformStack {
 
   }
 }
+
+
+export { default as getBaseConfig } from './getBaseConfig';
