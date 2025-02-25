@@ -3,7 +3,7 @@ import * as path from 'path';
 import { DynamoDBClient, ScanCommand, DeleteItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
 
 const dynamodbTablename = process.env.DYNAMODB_TABLE_NAME;
-const awsRegion = process.env.AWS_REGION || "a-south-1";
+const awsRegion = process.env.AWS_REGION || "ap-south-1";
 if (dynamodbTablename === undefined) {
   throw new Error('DynamoDB table not defined. Aborting.')
 }
@@ -72,7 +72,8 @@ async function purgeDB(dynamodbTablename: string) {
 }
 
 async function syncEnvironmentTypes() {
-  const environmentTypesData = await getEnvironmentTypesData()
+  const environmentTypesData = await getEnvironmentTypesData();
+  //@ts-ignore
   const purgeResults = await purgeDB(dynamodbTablename!);
   environmentTypesData.forEach(async (environmentTypeData) => {
     try {
