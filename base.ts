@@ -393,7 +393,7 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 14
+      nodejs: 22
   pre_build:
     commands:
       - echo Installing dependencies
