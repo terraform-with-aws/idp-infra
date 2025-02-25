@@ -401,7 +401,7 @@ phases:
   build:
     commands:
       - echo Running synchronization script    
-      - DYNAMODB_TABLE_NAME=${environmentTypesTable.name} npx ts-node ./scripts/syncEnvType.ts
+      - DYNAMODB_TABLE_NAME=${environmentTypesTable.name} npx ts-node ./scripts/syncDB.ts
 `,
       },
       vpcConfig: {
