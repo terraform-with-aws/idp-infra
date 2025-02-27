@@ -1,7 +1,7 @@
 import { App } from "cdktf";
 import { BaseStack } from "./base";
-import PetStack from "./contrib/PetApp";
-import getBaseConfig from "./contrib/PetApp/getBaseConfig";
+import PetStack from "./contrib/PetStack";
+import getBaseConfig from "./contrib/PetStack/getBaseConfig";
 
 const app = new App();
 //@ts-ignore
