@@ -15,15 +15,4 @@ new PetStack(app, "pet-app", {
   owner: "admin",
 });
 
-
-new PetApp(app, "pet-app-2", {
-  ...getBaseConfig(devBase),
-  owner: "rajshriyanshu5@gmail.com",
-  branch: "main"
-})
-new PetStack(app, "pet-app-3", {
-  ...getBaseConfig(devBase),
-  owner: "rajshriyanshu5@gmail.com",
-  branch: "main"
-})
 app.synth();
